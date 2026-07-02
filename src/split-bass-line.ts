@@ -35,7 +35,12 @@ export type BassPartition =
   | 'downbeats'
   | 'offbeats'
   | 'offbeats-8th'
-  | 'offbeats-16th';
+  | 'offbeats-16th'
+  // Variety voice (variety-voice.ts): structurally-placed notes extracted at
+  // 4-bar-group boundaries when the line is repetitive over a long clip.
+  | 'accents-down'
+  | 'accents-end'
+  | 'accents';
 
 export interface BassVoiceBucket {
   partition: BassPartition;

@@ -32,7 +32,7 @@ import {
   enforceMonophony,
   foldToRegister,
 } from './validate-bass-line';
-import { splitBassLine } from './split-bass-line';
+import { analyzeBassVoices } from './variety-voice';
 import {
   BASS_VOICE_META_KEY,
   bassVoiceGroupSpec,
@@ -114,7 +114,9 @@ export async function generateBassline(
   if (notes.length === 0) throw new Error('Bassline validation left no notes');
 
   // --- 5. Mechanical split → 1–3 voice buckets -----------------------------
-  const buckets = splitBassLine(notes);
+  // Primary register/metric split + the repetition-driven variety voice
+  // (symmetric timbre variety at 4-bar boundaries on long repetitive lines).
+  const buckets = analyzeBassVoices(notes, musicalContext.bars);
 
   // --- 6. Reconcile plan + track budget ------------------------------------
   const plan = planReconcile(existingMembers, buckets.length);
