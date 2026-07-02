@@ -69,6 +69,49 @@ describe('splitBassLine — register dimension', () => {
     expect(partitions).toEqual(['low', 'high']);
   });
 
+  it('cuts at EVERY qualifying gap — a three-register line yields three voices', () => {
+    // Sub, mid growl, and high stabs on downbeats only (no metric mix):
+    // gaps 14 and 12 → three clusters, balanced shares.
+    const notes: PluginMidiNote[] = [];
+    for (let bar = 0; bar < 8; bar++) {
+      notes.push(note(26, bar * 4, 1), note(40, bar * 4 + 1, 0.5), note(52, bar * 4 + 2, 0.25));
+    }
+    const buckets = splitBassLine(notes);
+    expect(buckets.map((b) => b.partition)).toEqual(['low', 'mid', 'high']);
+    expect(buckets.map((b) => b.label)).toEqual(['low register', 'mid register', 'high register']);
+    expect(buckets.map((b) => b.notes.length)).toEqual([8, 8, 8]);
+  });
+
+  it('supports four+ register voices with ordinal mid labels (no upper bound)', () => {
+    const notes: PluginMidiNote[] = [];
+    for (let bar = 0; bar < 8; bar++) {
+      for (const pitch of [26, 33, 40, 47]) notes.push(note(pitch, bar * 4 + (pitch - 26) / 7));
+    }
+    const buckets = splitBassLine(notes);
+    expect(buckets.map((b) => b.partition)).toEqual(['low', 'mid', 'mid', 'high']);
+    expect(buckets.map((b) => b.label)).toEqual([
+      'low register',
+      'mid register 1',
+      'mid register 2',
+      'high register',
+    ]);
+  });
+
+  it('merges a sub-threshold cluster into its NEAREST cluster instead of dropping the split', () => {
+    // 8 subs + 8 mids + ONE high accent (1/17 ≈ 6%): the lone high note joins
+    // the MID cluster (nearest centroid) and the 2-voice split still fires.
+    const notes: PluginMidiNote[] = [];
+    for (let bar = 0; bar < 8; bar++) {
+      notes.push(note(26, bar * 4, 1), note(40, bar * 4 + 1, 0.5));
+    }
+    notes.push(note(52, 30));
+    const buckets = splitBassLine(notes);
+    expect(buckets.map((b) => b.partition)).toEqual(['low', 'high']);
+    expect(buckets[0].notes).toHaveLength(8);
+    expect(buckets[1].notes).toHaveLength(9); // mids + the absorbed accent
+    expect(buckets[1].notes.some((n) => n.pitch === 52)).toBe(true);
+  });
+
   it('does not fire below the gap threshold', () => {
     // Largest adjacent gap = 4 semitones (< 5): chromatic-ish walking line
     // on downbeats + offs so metric fires instead.

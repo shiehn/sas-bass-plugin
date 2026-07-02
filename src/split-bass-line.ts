@@ -5,24 +5,32 @@
  * becomes and which note goes where. Never by declared intention — purely by
  * analysis of what was written (mirroring how preset range-selection works).
  *
+ * MULTI-VOICE: there is NO upper bound on voice count here — most basslines
+ * naturally land on 1–3 voices (especially short loops), but the analyzer
+ * emits as many voices as the line's structure supports; the only hard
+ * ceiling is the 16-track budget, enforced at generation time.
+ *
  * Two split dimensions, register preferred:
  *
- *  1. REGISTER — cluster pitches at the largest adjacent gap. Fires when the
- *     gap is ≥ SPLIT_MIN_GAP_SEMITONES and both clusters carry
- *     ≥ SPLIT_MIN_CLASS_SHARE of the notes. (Disco octave bass: D1s vs D2s.)
- *     Always 2 voices: low / high.
+ *  1. REGISTER — cluster pitches at EVERY adjacent gap of at least
+ *     SPLIT_MIN_GAP_SEMITONES (a wide line with sub, mid growl, and high
+ *     stabs yields three clusters; two gaps ≥ threshold → 3 voices, and so
+ *     on). Clusters holding < SPLIT_MIN_CLASS_SHARE of the notes never drop —
+ *     each merges into its nearest surviving cluster. Fires when ≥ 2 clusters
+ *     survive. Buckets order low → high: 'low', 'mid'…, 'high'.
  *
  *  2. METRIC — classify each note's grid position (fractional beat after the
  *     1/16 quantize: 0 = downbeat "1,2,3,4"; .5 = 8th-off "&"; .25/.75 =
- *     16th-off "e,a"). Classes holding ≥ SPLIT_MIN_CLASS_SHARE become voices
- *     (2 OR 3); a sub-threshold class never drops notes — it merges into the
- *     largest voiced class. An off-class bucket that absorbed the OTHER
- *     off-class's notes is labeled generic "offbeats (e,&,a)"; the downbeat
- *     bucket keeps its label even when it absorbs strays.
+ *     16th-off "e,a"). Classes holding ≥ SPLIT_MIN_CLASS_SHARE become voices;
+ *     a sub-threshold class never drops notes — it merges into the largest
+ *     voiced class. (Three classes is the arity of the 1/16 grid, not a cap.)
+ *     An off-class bucket that absorbed the OTHER off-class's notes is
+ *     labeled generic "offbeats (e,&,a)"; the downbeat bucket keeps its
+ *     label even when it absorbs strays.
  *
  * Single voice when fewer than SPLIT_MIN_NOTES notes or neither dimension
  * fires. Output buckets are ordered (voiceIndex order); bucket 0 is the
- * anchor (low register, or downbeats, or the whole line). Every bucket is
+ * anchor (lowest register, or downbeats, or the whole line). Every bucket is
  * non-empty by construction.
  */
 
@@ -31,6 +39,7 @@ import type { PluginMidiNote } from '@signalsandsorcery/plugin-sdk';
 export type BassPartition =
   | 'single'
   | 'low'
+  | 'mid'
   | 'high'
   | 'downbeats'
   | 'offbeats'
@@ -84,26 +93,62 @@ function registerCandidate(notes: PluginMidiNote[]): BassVoiceBucket[] | null {
   const pitches = [...new Set(notes.map((n) => n.pitch))].sort((a, b) => a - b);
   if (pitches.length < 2) return null;
 
-  let bestGap = 0;
-  let boundary = pitches[0];
-  for (let i = 0; i < pitches.length - 1; i++) {
-    const gap = pitches[i + 1] - pitches[i];
-    if (gap > bestGap) {
-      bestGap = gap;
-      boundary = pitches[i];
+  // Cut at EVERY adjacent gap ≥ threshold — as many clusters as the line's
+  // register structure supports (no upper bound).
+  const pitchClusters: number[][] = [[pitches[0]]];
+  for (let i = 1; i < pitches.length; i++) {
+    if (pitches[i] - pitches[i - 1] >= SPLIT_MIN_GAP_SEMITONES) {
+      pitchClusters.push([pitches[i]]);
+    } else {
+      pitchClusters[pitchClusters.length - 1].push(pitches[i]);
     }
   }
-  if (bestGap < SPLIT_MIN_GAP_SEMITONES) return null;
+  if (pitchClusters.length < 2) return null;
 
-  const low = notes.filter((n) => n.pitch <= boundary);
-  const high = notes.filter((n) => n.pitch > boundary);
-  const share = Math.min(low.length, high.length) / notes.length;
-  if (share < SPLIT_MIN_CLASS_SHARE) return null;
+  interface Cluster {
+    notes: PluginMidiNote[];
+    centroid: number;
+  }
+  let clusters: Cluster[] = pitchClusters.map((ps) => {
+    const set = new Set(ps);
+    const cn = notes.filter((n) => set.has(n.pitch));
+    return { notes: cn, centroid: ps.reduce((s, p) => s + p, 0) / ps.length };
+  });
 
-  return [
-    { partition: 'low', label: 'low register', notes: low },
-    { partition: 'high', label: 'high register', notes: high },
-  ];
+  // Sub-threshold clusters never drop notes — each merges into its NEAREST
+  // surviving cluster (by pitch centroid; ties toward the lower one).
+  // Smallest-first keeps the merge order deterministic.
+  const minCount = notes.length * SPLIT_MIN_CLASS_SHARE;
+  for (;;) {
+    if (clusters.length < 2) break;
+    const small = clusters
+      .filter((c) => c.notes.length < minCount)
+      .sort((a, b) => a.notes.length - b.notes.length || a.centroid - b.centroid)[0];
+    if (!small) break;
+    const others = clusters.filter((c) => c !== small);
+    let target = others[0];
+    for (const o of others) {
+      const d = Math.abs(o.centroid - small.centroid);
+      const best = Math.abs(target.centroid - small.centroid);
+      if (d < best || (d === best && o.centroid < target.centroid)) target = o;
+    }
+    const mergedNotes = [...target.notes, ...small.notes];
+    const merged: Cluster = {
+      notes: mergedNotes,
+      centroid: mergedNotes.reduce((s, n) => s + n.pitch, 0) / mergedNotes.length,
+    };
+    clusters = others.map((c) => (c === target ? merged : c));
+  }
+  if (clusters.length < 2) return null;
+
+  clusters.sort((a, b) => a.centroid - b.centroid);
+  return clusters.map((c, i): BassVoiceBucket => {
+    const bucketNotes = [...c.notes].sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
+    if (i === 0) return { partition: 'low', label: 'low register', notes: bucketNotes };
+    if (i === clusters.length - 1) return { partition: 'high', label: 'high register', notes: bucketNotes };
+    const midOrdinal = clusters.length > 3 ? ` ${i}` : '';
+    return { partition: 'mid', label: `mid register${midOrdinal}`, notes: bucketNotes };
+  });
 }
 
 // ---------------------------------------------------------------------------

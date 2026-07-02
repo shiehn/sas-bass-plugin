@@ -12,9 +12,11 @@
  *  1. Repetitiveness is measured on bar fingerprints that combine RHYTHM
  *     (1/16-quantized onsets + duration buckets) and HARMONY (pitches):
  *     score = fraction of bars that exactly repeat an EARLIER bar.
- *  2. When the clip has ≥ VARIETY_MIN_BARS bars, the primary split left room
- *     (≤ 2 voices), and the score ≥ VARIETY_MIN_REPETITION, extract one note
- *     per VARIETY_GROUP_BARS-bar group into a new "variety" voice:
+ *  2. When the clip has ≥ VARIETY_MIN_BARS bars and the score ≥
+ *     VARIETY_MIN_REPETITION, extract one note per VARIETY_GROUP_BARS-bar
+ *     group into a new "variety" voice appended after the primary voices
+ *     (however many there are — voice count has no upper bound; the 16-track
+ *     budget at generation time is the only ceiling):
  *       - each group's LAST note when the last notes are sustained
  *         (mean duration ≥ VARIETY_SUSTAIN_MIN_BEATS) — "the last sub is
  *         different every 4 bars";
@@ -42,8 +44,6 @@ export const VARIETY_MIN_REPETITION = 0.5;
 export const VARIETY_HIGH_REPETITION = 0.85;
 /** Mean last-note duration (beats) that makes the phrase-END the extraction target. */
 export const VARIETY_SUSTAIN_MIN_BEATS = 1;
-/** Primary splits with more voices than this skip variety (meta caps at 3 voices). */
-export const VARIETY_MAX_PRIMARY_VOICES = 2;
 
 const BEATS_PER_BAR = 4;
 
@@ -134,7 +134,6 @@ export function extractVarietyVoice(
   notes: PluginMidiNote[],
   bars: number,
 ): BassVoiceBucket[] {
-  if (buckets.length > VARIETY_MAX_PRIMARY_VOICES) return buckets;
   if (bars < VARIETY_MIN_BARS) return buckets;
   const groupCount = Math.floor(bars / VARIETY_GROUP_BARS);
   if (groupCount < 2) return buckets;

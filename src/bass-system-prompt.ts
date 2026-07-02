@@ -3,7 +3,7 @@
  *
  * The LLM's ONLY job is to compose ONE flat, strictly monophonic electronic
  * bassline (synth-shaped `{notes:[...]}` schema — no roles, no voices).
- * Splitting the line across 1–3 timbral voice tracks is NOT the LLM's job:
+ * Splitting the line across timbral voice tracks is NOT the LLM's job:
  * a mechanical analyzer (split-bass-line.ts) partitions the validated notes
  * by register or metric position afterwards. Keep ALL voice/track/sound
  * language out of this prompt — sound selection is likewise mechanical

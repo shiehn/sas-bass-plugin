@@ -1,6 +1,6 @@
 # Bass Generator Plugin
 
-A [Signals & Sorcery](https://signalsandsorcery.com) plugin dedicated to electronic basslines — describe one bassline and get a single monophonic line mechanically partitioned across 1–3 tracks, each with its own Surge XT sound.
+A [Signals & Sorcery](https://signalsandsorcery.com) plugin dedicated to electronic basslines — describe one bassline and get a single monophonic line mechanically partitioned across multiple tracks — typically 1–3, with no upper bound — each with its own Surge XT sound.
 
 <p align="center">
   <img src="assets/signals-and-sorcery.png" alt="Signals & Sorcery" width="420" />
@@ -11,6 +11,7 @@ A [Signals & Sorcery](https://signalsandsorcery.com) plugin dedicated to electro
 ## What it does
 
 - One prompt ("disco octave bass", "constant 16th pump", "dark roller into a sub drop") composes ONE strictly monophonic bassline — never chords, never layers
+- **Multi-voice with no upper bound**: most lines land on 1–3 voices naturally (especially short loops); wide or long repetitive lines earn more — the only ceiling is the app's 16-track budget
 - A **mechanical analyzer** (not the LLM) splits the line across voice tracks:
   - **Register split** — e.g. an octave bass becomes a low track and a high track at the largest pitch gap
   - **Metric split** — downbeats (1,2,3,4), 8th offbeats (&), and 16th offbeats (e,a) become their own tracks
@@ -18,6 +19,7 @@ A [Signals & Sorcery](https://signalsandsorcery.com) plugin dedicated to electro
 - The voices form one horizontal line (a hocket): timbre changes note-to-note while the ear hears a single bassline
 - Each voice's Surge XT preset is chosen by range analysis of its actual notes — sustained subs draw low presets, mid stabs draw high ones — with sibling sounds excluded so every voice starts distinct
 - Regeneration reconciles the voice group and **never replaces a sound you picked**; per-voice 🎲 shuffle, sound history, FX chain, and piano-roll editing all work per track
+- **Copy a voice** (⧉ on any voice row): a deep copy — same notes and preset by value, brand-new track identity, no pointer to the original — appended to the group, muted, ready to re-sound
 
 ## Install
 

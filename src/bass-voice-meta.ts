@@ -1,7 +1,7 @@
 /**
  * Bass voice-group metadata + the reconcile planner.
  *
- * A bassline group is 1–3 normal tracks linked by per-member scene-data keys
+ * A bassline group is N normal tracks linked by per-member scene-data keys
  * `track:<dbId>:bassVoice` sharing a groupId — the SDK's generic group seam
  * (the crossfade pattern). The ANCHOR is voice 0: its track carries the
  * group's bassline prompt under the standard `track:<dbId>:prompt` key and

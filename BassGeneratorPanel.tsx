@@ -4,16 +4,18 @@
  * A thin GeneratorPanelAdapter over the SDK panel-core, differing from the
  * synth panel in exactly one structural way: generation is GROUP-shaped. One
  * bassline prompt (carried by the anchor track) produces ONE monophonic line
- * that a mechanical analyzer partitions across 1–3 voice tracks (register or
+ * that a mechanical analyzer partitions across voice tracks (register or
  * metric split — see src/split-bass-line.ts), rendered as a stacked voice
  * group via the SDK's generic group seam:
  *
  *   - the group header carries the bassline prompt + Generate + group
  *     mute/solo/delete (ConfirmDialog-guarded)
  *   - voice rows are standard TrackRows whose prompt field shows the
- *     mechanical partition label; no per-voice Generate/copy/delete
- *     (the partition is derived — regenerate the group instead); full
+ *     mechanical partition label; no per-voice Generate/delete (the
+ *     partition is derived — regenerate the group instead); full
  *     🎲 / sound-history / Pick / FX / piano-roll / mixer per voice
+ *   - per-voice COPY (⧉) deep-copies a voice — same notes + preset by
+ *     value, brand-new identity — appended to the group (no voice cap)
  *   - reused voices keep their preset on regeneration, ALWAYS
  *
  * Sound serialization + 🎲 are the same mechanical Surge paths the synth

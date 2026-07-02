@@ -3,7 +3,7 @@
  *
  * One group-level turn: LLM composes ONE monophonic line from the anchor's
  * prompt → deterministic validation (clip bounds → host 1/16 quantize →
- * monophony sweep → register fold) → mechanical splitBassLine (1–3 buckets)
+ * monophony sweep → register fold) → mechanical splitBassLine (multi-voice)
  * → planReconcile against the existing group → execute:
  *
  *   reuse  : clip replaced, PRESET UNTOUCHED (user curation survives)
@@ -113,9 +113,11 @@ export async function generateBassline(
   notes = foldToRegister(notes);
   if (notes.length === 0) throw new Error('Bassline validation left no notes');
 
-  // --- 5. Mechanical split → 1–3 voice buckets -----------------------------
+  // --- 5. Mechanical split → voice buckets (no upper bound) ----------------
   // Primary register/metric split + the repetition-driven variety voice
   // (symmetric timbre variety at 4-bar boundaries on long repetitive lines).
+  // Most lines land on 1–3 voices naturally; the only hard ceiling is the
+  // track budget below.
   const buckets = analyzeBassVoices(notes, musicalContext.bars);
 
   // --- 6. Reconcile plan + track budget ------------------------------------

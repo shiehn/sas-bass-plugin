@@ -166,14 +166,23 @@ describe('variety skip conditions', () => {
     expect(extractVarietyVoice(primary, notes, 16)).toBe(primary);
   });
 
-  it('never fires when the primary split already used 3 voices', () => {
-    // Full 16th pump over 8 bars → 3-way metric split.
+  it('stacks on top of a 3-voice primary split — voice count has no upper bound', () => {
+    // Full 16th pump over 8 bars → 3-way metric split; fully repetitive, so
+    // the variety voice appends as a FOURTH voice (both boundaries per group).
     const notes: PluginMidiNote[] = [];
     for (let beat = 0; beat < 32; beat++) {
       for (const frac of [0, 0.25, 0.5, 0.75]) notes.push(note(38, beat + frac));
     }
     const buckets = analyzeBassVoices(notes, 8);
-    expect(buckets.map((b) => b.partition)).toEqual(['downbeats', 'offbeats-8th', 'offbeats-16th']);
+    expect(buckets.map((b) => b.partition)).toEqual([
+      'downbeats',
+      'offbeats-8th',
+      'offbeats-16th',
+      'accents',
+    ]);
+    // 2 groups × (first + last) = 4 extracted notes, moved not duplicated.
+    expect(buckets[3].notes.map((n) => n.startBeat)).toEqual([0, 15.75, 16, 31.75]);
+    expect(buckets.reduce((s, b) => s + b.notes.length, 0)).toBe(notes.length);
   });
 
   it('bails rather than hollow out a primary voice', () => {
