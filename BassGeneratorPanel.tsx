@@ -29,6 +29,7 @@ import type {
   GeneratorPanelAdapter,
   GeneratorTrackState,
   GroupRenderContext,
+  PanelSoundAdapter,
   ResolvedTrackGroup,
 } from '@signalsandsorcery/plugin-sdk';
 import {
@@ -39,6 +40,7 @@ import {
 } from '@signalsandsorcery/plugin-sdk';
 import { buildBassSystemPrompt } from './src/bass-system-prompt';
 import { generateBassline, BASS_MAX_TRACKS } from './src/bass-generation';
+import { copyBassVoice } from './src/copy-voice';
 import {
   BASS_VOICE_META_KEY,
   bassVoiceGroupSpec,
@@ -56,9 +58,10 @@ const ESTIMATED_GENERATION_MS = 15000;
 interface BassVoiceGroupRowProps {
   group: ResolvedTrackGroup<BassVoiceMeta, GeneratorTrackState>;
   ctx: GroupRenderContext;
+  sound: PanelSoundAdapter;
 }
 
-function BassVoiceGroupRow({ group, ctx }: BassVoiceGroupRowProps): React.ReactElement {
+function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React.ReactElement {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // isComplete guarantees the anchor is live.
   const anchor = group.members.find((m) => m.meta.voiceIndex === 0) ?? group.members[0];
@@ -137,9 +140,13 @@ function BassVoiceGroupRow({ group, ctx }: BassVoiceGroupRowProps): React.ReactE
             // bassline intent lives on the group header (anchor's prompt key).
             prompt: m.meta.label || 'bass voice',
             onPromptChange: undefined,
-            // The partition is derived — no per-voice generate/copy/delete.
+            // The partition is derived — no per-voice generate/delete (the
+            // group owns those). Copy IS per-voice: a DEEP copy appended to
+            // the group (same notes + preset by value, fresh identity).
             onGenerate: undefined,
-            onCopy: undefined,
+            onCopy: () => {
+              void copyBassVoice({ services: ctx.services, sound, group, member: m });
+            },
             onDelete: undefined,
           }),
         )}
@@ -169,6 +176,9 @@ function BassVoiceGroupRow({ group, ctx }: BassVoiceGroupRowProps): React.ReactE
 // ============================================================================
 
 function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<BassVoiceMeta> {
+  // One shared Surge sound adapter: the panel's sound serialization AND the
+  // per-voice deep-copy flow use the same instance.
+  const surgeSound = createSurgeSoundAdapter(host);
   return {
     identity: {
       familyKey: 'bass',
@@ -199,7 +209,7 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
     },
     buildSystemPrompt: () => buildBassSystemPrompt(),
     parseNotesResponse: parseLLMNoteResponse,
-    sound: createSurgeSoundAdapter(host),
+    sound: surgeSound,
     shuffle: {
       // Same mechanical path as synth: role 'bass' + the clip's REAL pitch
       // range drive the Basses-hi/low category host-side; random within it.
@@ -215,7 +225,7 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       {
         ...bassVoiceGroupSpec,
         isComplete: bassGroupIsComplete,
-        renderGroup: (group, ctx) => <BassVoiceGroupRow group={group} ctx={ctx} />,
+        renderGroup: (group, ctx) => <BassVoiceGroupRow group={group} ctx={ctx} sound={surgeSound} />,
       },
     ],
   };
