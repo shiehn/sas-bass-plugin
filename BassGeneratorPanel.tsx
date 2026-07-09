@@ -49,6 +49,7 @@ import {
   bassGroupIsComplete,
   type BassVoiceMeta,
 } from './src/bass-voice-meta';
+import { createBassTransitionGroupAdapter } from './src/bass-transition';
 import { parseLLMNoteResponse } from '@signalsandsorcery/plugin-sdk';
 
 const ESTIMATED_GENERATION_MS = 15000;
@@ -198,7 +199,10 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       instrumentPicker: true,
       bulkComposePlaceholders: false,
       exportMidi: true,
-      transitionDesigner: false,
+      // Fade-only designer (transitionGroup below): basslines are voice
+      // GROUPS with data-dependent counts, so 1:1 crossfades are undefined —
+      // each bassline verbatim-copies and fades as a unit instead.
+      transitionDesigner: true,
       importTracks: false,
     },
     createTrackOptions: () => ({ loadSynth: true, synthName: 'Surge XT' }),
@@ -230,6 +234,7 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
         renderGroup: (group, ctx) => <BassVoiceGroupRow group={group} ctx={ctx} sound={surgeSound} />,
       },
     ],
+    transitionGroup: createBassTransitionGroupAdapter(host),
   };
 }
 
