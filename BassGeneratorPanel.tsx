@@ -218,9 +218,12 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
     sound: surgeSound,
     shuffle: {
       // Same mechanical path as synth: role 'bass' + the clip's REAL pitch
-      // range drive the Basses-hi/low category host-side; random within it.
+      // range drive the Basses-hi/low category host-side. The live prompt
+      // upgrades the pick to semantic retrieval when the patch index is there.
       shuffle: async (track: GeneratorTrackState, excludeNames: string[]) => {
-        const result = await host.shufflePreset(track.handle.id, excludeNames);
+        const result = await host.shufflePreset(track.handle.id, excludeNames, {
+          description: track.prompt,
+        });
         return { appliedName: result.presetName };
       },
       isExhaustedError: (err: unknown) =>

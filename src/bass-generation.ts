@@ -172,7 +172,12 @@ export async function generateBassline(
       const member = memberByBucket.get(i)!;
       if (!member.isNew) continue;
       try {
-        const result = await host.shufflePreset(member.engineId, appliedNames);
+        // Pass the bassline prompt so the host's semantic (vector-proximity)
+        // retrieval can pick by timbre; bucket labels are rhythmic ("offbeats"),
+        // not timbral, so they'd only pollute the query.
+        const result = await host.shufflePreset(member.engineId, appliedNames, {
+          description: track.prompt,
+        });
         appliedNames.push(result.presetName);
       } catch {
         /* non-fatal — default patch */
