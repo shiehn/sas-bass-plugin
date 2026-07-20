@@ -11,11 +11,14 @@
  *   - the group header carries the bassline prompt + Generate + group
  *     mute/solo/delete (ConfirmDialog-guarded)
  *   - voice rows are standard TrackRows whose prompt field shows the
- *     mechanical partition label; no per-voice Generate/delete (the
- *     partition is derived — regenerate the group instead); full
+ *     mechanical partition label; no per-voice Generate (the partition is
+ *     derived — regenerate the group instead); full
  *     🎲 / sound-history / Pick / FX / piano-roll / mixer per voice
  *   - per-voice COPY (⧉) deep-copies a voice — same notes + preset by
  *     value, brand-new identity — appended to the group (no voice cap)
+ *   - per-voice DELETE (✕, ConfirmDialog-guarded) removes just that voice;
+ *     deleting the anchor hands the prompt + group identity to the next
+ *     voice (src/remove-voice.ts) so the group never degrades
  *   - reused voices keep their preset on regeneration, ALWAYS
  *
  * Sound serialization + 🎲 are the same mechanical Surge paths the synth
@@ -43,6 +46,7 @@ import {
 import { buildBassSystemPrompt } from './src/bass-system-prompt';
 import { generateBassline, BASS_MAX_TRACKS } from './src/bass-generation';
 import { copyBassVoice } from './src/copy-voice';
+import { prepareVoiceRemoval } from './src/remove-voice';
 import {
   BASS_VOICE_META_KEY,
   bassVoiceGroupSpec,
@@ -50,7 +54,7 @@ import {
   type BassVoiceMeta,
 } from './src/bass-voice-meta';
 import { createBassTransitionGroupAdapter } from './src/bass-transition';
-import { parseLLMNoteResponse } from '@signalsandsorcery/plugin-sdk';
+import { parseLLMNoteResponse, promptEnterToGenerate } from '@signalsandsorcery/plugin-sdk';
 
 const ESTIMATED_GENERATION_MS = 15000;
 
@@ -74,6 +78,38 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
   const anySoloed = group.members.some((m) => m.track.runtimeState.solo);
   const generateDisabled = anchorTrack.isGenerating || !anchorTrack.prompt.trim();
 
+  // Per-voice delete (TrackRow's own ConfirmDialog gates the click): anchor
+  // handoff surgery first when voice 0 goes, then the track + key scrub.
+  // Abort on surgery failure so the group is never left half-re-pointed with
+  // the voice already gone.
+  const handleVoiceDelete = (member: (typeof group.members)[number]): void => {
+    void (async () => {
+      const scene = ctx.services.activeSceneId;
+      try {
+        if (scene) {
+          await prepareVoiceRemoval({
+            host: ctx.services.host,
+            sceneId: scene,
+            keyFor: ctx.services.trackDataKey,
+            members: group.members.map((gm) => ({ dbId: gm.dbId, meta: gm.meta })),
+            deletedDbId: member.dbId,
+          });
+        }
+      } catch (err) {
+        ctx.services.host.showToast(
+          'error',
+          'Failed to delete voice',
+          err instanceof Error ? err.message : String(err),
+        );
+        return;
+      }
+      await ctx.deleteGroup(
+        [{ engineId: member.track.handle.id, dbId: member.dbId }],
+        [BASS_VOICE_META_KEY, 'prompt', 'soundHistory', 'role'],
+      );
+    })();
+  };
+
   return (
     <div
       data-testid={`bass-group-${group.groupId}`}
@@ -90,6 +126,10 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
           value={anchorTrack.prompt}
           placeholder="Describe the bassline…"
           onChange={(e) => ctx.handlers.promptChange(anchorTrack.handle.id, e.target.value)}
+          onKeyDown={promptEnterToGenerate(
+            () => ctx.handlers.generate(anchorTrack.handle.id),
+            generateDisabled
+          )}
         />
         <button
           data-testid={`bass-group-generate-${group.groupId}`}
@@ -143,14 +183,16 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
             // bassline intent lives on the group header (anchor's prompt key).
             prompt: m.meta.label || 'bass voice',
             onPromptChange: undefined,
-            // The partition is derived — no per-voice generate/delete (the
-            // group owns those). Copy IS per-voice: a DEEP copy appended to
-            // the group (same notes + preset by value, fresh identity).
+            // The partition is derived — no per-voice generate (the group
+            // owns it). Copy IS per-voice: a DEEP copy appended to the group
+            // (same notes + preset by value, fresh identity). Delete is the
+            // inverse: it removes just that voice (the next Generate
+            // re-partitions from scratch anyway).
             onGenerate: undefined,
             onCopy: () => {
               void copyBassVoice({ services: ctx.services, sound, group, member: m });
             },
-            onDelete: undefined,
+            onDelete: () => handleVoiceDelete(m),
           }),
         )}
       </div>
