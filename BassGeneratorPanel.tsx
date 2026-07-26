@@ -42,6 +42,7 @@ import {
   useGeneratorPanelCore,
   createSurgeSoundAdapter,
   ConfirmDialog,
+  GroupCollapseChevron,
 } from '@signalsandsorcery/plugin-sdk';
 import { buildBassSystemPrompt } from './src/bass-system-prompt';
 import { generateBassline, BASS_MAX_TRACKS } from './src/bass-generation';
@@ -105,7 +106,7 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
       }
       await ctx.deleteGroup(
         [{ engineId: member.track.handle.id, dbId: member.dbId }],
-        [BASS_VOICE_META_KEY, 'prompt', 'soundHistory', 'role'],
+        [BASS_VOICE_META_KEY, 'prompt', 'soundHistory', 'role', 'groupUi'],
       );
     })();
   };
@@ -117,6 +118,7 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
       style={{ borderLeftColor: '#F97316', borderLeftWidth: '3px' }}
     >
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-sas-border">
+        <GroupCollapseChevron collapsed={ctx.collapsed} onToggle={ctx.onToggleCollapse} what="bassline" />
         <span className="text-[9px] uppercase tracking-wide text-sas-muted whitespace-nowrap">
           Bassline · {group.members.length} {group.members.length === 1 ? 'voice' : 'voices'}
         </span>
@@ -176,26 +178,28 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
           ✕
         </button>
       </div>
-      <div className="p-1 space-y-1">
-        {group.members.map((m) =>
-          ctx.renderDefaultTrackRow(m.track, {
-            // The prompt field shows the MECHANICAL partition label; the
-            // bassline intent lives on the group header (anchor's prompt key).
-            prompt: m.meta.label || 'bass voice',
-            onPromptChange: undefined,
-            // The partition is derived — no per-voice generate (the group
-            // owns it). Copy IS per-voice: a DEEP copy appended to the group
-            // (same notes + preset by value, fresh identity). Delete is the
-            // inverse: it removes just that voice (the next Generate
-            // re-partitions from scratch anyway).
-            onGenerate: undefined,
-            onCopy: () => {
-              void copyBassVoice({ services: ctx.services, sound, group, member: m });
-            },
-            onDelete: () => handleVoiceDelete(m),
-          }),
-        )}
-      </div>
+      {!ctx.collapsed && (
+        <div className="p-1 space-y-1">
+          {group.members.map((m) =>
+            ctx.renderDefaultTrackRow(m.track, {
+              // The prompt field shows the MECHANICAL partition label; the
+              // bassline intent lives on the group header (anchor's prompt key).
+              prompt: m.meta.label || 'bass voice',
+              onPromptChange: undefined,
+              // The partition is derived — no per-voice generate (the group
+              // owns it). Copy IS per-voice: a DEEP copy appended to the group
+              // (same notes + preset by value, fresh identity). Delete is the
+              // inverse: it removes just that voice (the next Generate
+              // re-partitions from scratch anyway).
+              onGenerate: undefined,
+              onCopy: () => {
+                void copyBassVoice({ services: ctx.services, sound, group, member: m });
+              },
+              onDelete: () => handleVoiceDelete(m),
+            }),
+          )}
+        </div>
+      )}
       <ConfirmDialog
         open={confirmDelete}
         title="Delete bassline?"
@@ -206,7 +210,7 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
           setConfirmDelete(false);
           void ctx.deleteGroup(
             group.members.map((m) => ({ engineId: m.track.handle.id, dbId: m.dbId })),
-            [BASS_VOICE_META_KEY, 'prompt', 'soundHistory', 'role'],
+            [BASS_VOICE_META_KEY, 'prompt', 'soundHistory', 'role', 'groupUi'],
           );
         }}
         onCancel={() => setConfirmDelete(false)}
