@@ -259,7 +259,10 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
         /* non-fatal */
       }
     },
-    buildSystemPrompt: () => buildBassSystemPrompt(),
+    // The core passes the scene meter (SDK 2.50.0) — non-4/4 scenes append
+    // the bass meter rules; 4/4 stays byte-identical. Roles are unused (bass
+    // tracks are always role 'bass').
+    buildSystemPrompt: (_validRoles, timeSignature) => buildBassSystemPrompt(timeSignature),
     parseNotesResponse: parseLLMNoteResponse,
     sound: surgeSound,
     shuffle: {

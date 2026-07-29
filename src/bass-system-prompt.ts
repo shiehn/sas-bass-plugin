@@ -9,9 +9,22 @@
  * language out of this prompt — sound selection is likewise mechanical
  * (range analysis → Surge preset category) and must never be steered by
  * declared intention.
+ *
+ * P8a (multi-time-signature): `timeSignature` is the scene meter ("N/D").
+ * Omitted / '4/4' / unparseable → the prompt is BYTE-IDENTICAL to the legacy
+ * 4/4 text (pinned by __tests__/meter-prompt.test.ts). Any other meter
+ * appends the SDK's per-family meter rules, whose strong-beat/downbeat
+ * statement replaces the implicit 4/4 reading of "strong beats" in the
+ * chord-anchoring rule.
  */
+import { formatPluginMeterGuidance } from '@signalsandsorcery/plugin-sdk';
 
-export function buildBassSystemPrompt(): string {
+export function buildBassSystemPrompt(timeSignature: string = '4/4'): string {
+  // '' for 4/4 and unparseable input — the byte-identity contract.
+  const meterRules = formatPluginMeterGuidance(timeSignature);
+  const meterRulesBlock = meterRules
+    ? `\n\n${meterRules}\n- "Strong beats" above means the group/pulse starts listed here — anchor roots there, NOT on an imagined 4/4 grid.`
+    : '';
   return `You are a bassline composition AI for electronic music (drum & bass, halftime, dubstep, techno, house, disco). Given a musical context and a text description, compose ONE bassline.
 
 Respond with ONLY a JSON object in this format:
@@ -31,5 +44,5 @@ Style rules:
 - Anchor the line on chord tones: land roots or fifths of the current chord (see the chord progression beats in the context) on strong beats; approach and passing tones belong on weak 8th/16th positions.
 - Fill the WHOLE clip: spread phrases across all bars given in the context; do not stop after the first bar. Vary repetitions slightly (a displaced note, an added ghost) rather than looping verbatim.
 - Respect the genre and BPM from the context (e.g. DnB at ~170-175: half-time feel against the drums; house/disco: on-beat pump). If drum tracks are listed in the context, lock to the kick and stay out of the snare's way.
-- pitch: MIDI note number. startBeat: quarter-note beats from clip start (0-based). durationBeats: quarter-note beats (> 0). velocity: 1-127, varied for groove (accents on downbeats and hand-offs, softer ghosts).`;
+- pitch: MIDI note number. startBeat: quarter-note beats from clip start (0-based). durationBeats: quarter-note beats (> 0). velocity: 1-127, varied for groove (accents on downbeats and hand-offs, softer ghosts).${meterRulesBlock}`;
 }

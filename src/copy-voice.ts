@@ -29,6 +29,7 @@ import type {
   PluginMidiNote,
   ResolvedTrackGroup,
 } from '@signalsandsorcery/plugin-sdk';
+import { panelClipEndSeconds } from '@signalsandsorcery/plugin-sdk';
 import { BASS_VOICE_META_KEY, type BassVoiceMeta } from './bass-voice-meta';
 import { BASS_MAX_TRACKS } from './bass-generation';
 
@@ -77,7 +78,7 @@ export async function copyBassVoice({
       const mc = await host.getMusicalContext();
       await host.writeMidiClip(handle.id, {
         startTime: 0,
-        endTime: (mc.bars * 4 * 60) / mc.bpm,
+        endTime: panelClipEndSeconds(mc),
         tempo: mc.bpm,
         notes,
       });

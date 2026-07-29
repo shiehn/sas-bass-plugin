@@ -32,11 +32,12 @@
  */
 
 import type { PluginMidiNote } from '@signalsandsorcery/plugin-sdk';
+import { barsToQn, tryParseTimeSignature } from '@signalsandsorcery/plugin-sdk';
 import { splitBassLine, type BassVoiceBucket } from './split-bass-line';
 
 /** Variety never fires on clips shorter than this many bars. */
 export const VARIETY_MIN_BARS = 8;
-/** Phrase-group size in bars (the "every 4 bars" symmetry). */
+/** Phrase-group size in bars (the "every 4 bars" symmetry) — BARS, whatever the meter. */
 export const VARIETY_GROUP_BARS = 4;
 /** Repetitiveness gate: below this, the line already varies — no extraction. */
 export const VARIETY_MIN_REPETITION = 0.5;
@@ -45,7 +46,17 @@ export const VARIETY_HIGH_REPETITION = 0.85;
 /** Mean last-note duration (beats) that makes the phrase-END the extraction target. */
 export const VARIETY_SUSTAIN_MIN_BEATS = 1;
 
-const BEATS_PER_BAR = 4;
+/**
+ * Quarter notes per bar of the given meter (P8a): bar windows — fingerprints
+ * and 4-bar group boundaries — are sliced in the scene meter's quarter notes.
+ * Groups stay VARIETY_GROUP_BARS *bars* in every meter; only the bar's qn
+ * width changes. Omitted/malformed meters degrade to 4 (the legacy constant).
+ */
+function qnPerBar(timeSignature: string | undefined): number {
+  return timeSignature && tryParseTimeSignature(timeSignature)
+    ? barsToQn(1, timeSignature)
+    : 4;
+}
 
 // ---------------------------------------------------------------------------
 // Repetitiveness
@@ -60,11 +71,12 @@ function durationBucket(durationBeats: number): 's' | 'm' | 'l' {
 /**
  * Fingerprint one bar: 1/16-quantized onset within the bar + pitch + duration
  * bucket per note, order-normalized. Combines the rhythmic and harmonic
- * dimensions — two bars match only when both repeat.
+ * dimensions — two bars match only when both repeat. `beatsPerBar` is the
+ * meter's quarter notes per bar (4 in 4/4).
  */
-function barFingerprint(notes: PluginMidiNote[], barIndex: number): string {
-  const start = barIndex * BEATS_PER_BAR;
-  const end = start + BEATS_PER_BAR;
+function barFingerprint(notes: PluginMidiNote[], barIndex: number, beatsPerBar: number): string {
+  const start = barIndex * beatsPerBar;
+  const end = start + beatsPerBar;
   const cells = notes
     .filter((n) => n.startBeat >= start && n.startBeat < end)
     .map((n) => `${Math.round((n.startBeat - start) * 4) / 4}:${n.pitch}:${durationBucket(n.durationBeats)}`)
@@ -75,13 +87,19 @@ function barFingerprint(notes: PluginMidiNote[], barIndex: number): string {
 /**
  * Fraction of bars (past the first) that exactly repeat an EARLIER bar.
  * 16 identical bars → 15/16 ≈ 0.94; fully through-composed → 0.
+ * `timeSignature` (P8a) sizes the bar window; omitted = 4/4-identical.
  */
-export function repetitivenessScore(notes: PluginMidiNote[], bars: number): number {
+export function repetitivenessScore(
+  notes: PluginMidiNote[],
+  bars: number,
+  timeSignature?: string,
+): number {
   if (bars <= 1) return 0;
+  const beatsPerBar = qnPerBar(timeSignature);
   const seen = new Set<string>();
   let repeats = 0;
   for (let bar = 0; bar < bars; bar++) {
-    const fp = barFingerprint(notes, bar);
+    const fp = barFingerprint(notes, bar, beatsPerBar);
     if (seen.has(fp)) repeats++;
     else seen.add(fp);
   }
@@ -98,13 +116,17 @@ interface GroupBoundaryNotes {
   last: PluginMidiNote | null;
 }
 
-function boundaryNotesPerGroup(notes: PluginMidiNote[], bars: number): GroupBoundaryNotes[] {
+function boundaryNotesPerGroup(
+  notes: PluginMidiNote[],
+  bars: number,
+  beatsPerBar: number,
+): GroupBoundaryNotes[] {
   const groups: GroupBoundaryNotes[] = [];
   const groupCount = Math.floor(bars / VARIETY_GROUP_BARS);
   const sorted = [...notes].sort((a, b) => a.startBeat - b.startBeat);
   for (let g = 0; g < groupCount; g++) {
-    const start = g * VARIETY_GROUP_BARS * BEATS_PER_BAR;
-    const end = start + VARIETY_GROUP_BARS * BEATS_PER_BAR;
+    const start = g * VARIETY_GROUP_BARS * beatsPerBar;
+    const end = start + VARIETY_GROUP_BARS * beatsPerBar;
     const inGroup = sorted.filter((n) => n.startBeat >= start && n.startBeat < end);
     groups.push({
       first: inGroup[0] ?? null,
@@ -117,10 +139,15 @@ function boundaryNotesPerGroup(notes: PluginMidiNote[], bars: number): GroupBoun
 /**
  * The full bass voice analysis: primary register/metric split, then the
  * repetition-driven variety extraction. This is what generation calls.
+ * `timeSignature` (P8a) sizes the bar/group windows; omitted = 4/4-identical.
  */
-export function analyzeBassVoices(notes: PluginMidiNote[], bars: number): BassVoiceBucket[] {
+export function analyzeBassVoices(
+  notes: PluginMidiNote[],
+  bars: number,
+  timeSignature?: string,
+): BassVoiceBucket[] {
   const buckets = splitBassLine(notes);
-  return extractVarietyVoice(buckets, notes, bars);
+  return extractVarietyVoice(buckets, notes, bars, timeSignature);
 }
 
 /**
@@ -133,15 +160,16 @@ export function extractVarietyVoice(
   buckets: BassVoiceBucket[],
   notes: PluginMidiNote[],
   bars: number,
+  timeSignature?: string,
 ): BassVoiceBucket[] {
   if (bars < VARIETY_MIN_BARS) return buckets;
   const groupCount = Math.floor(bars / VARIETY_GROUP_BARS);
   if (groupCount < 2) return buckets;
 
-  const score = repetitivenessScore(notes, bars);
+  const score = repetitivenessScore(notes, bars, timeSignature);
   if (score < VARIETY_MIN_REPETITION) return buckets;
 
-  const groups = boundaryNotesPerGroup(notes, bars);
+  const groups = boundaryNotesPerGroup(notes, bars, qnPerBar(timeSignature));
   const lastNotes = groups.map((g) => g.last).filter((n): n is PluginMidiNote => n !== null);
   const firstNotes = groups.map((g) => g.first).filter((n): n is PluginMidiNote => n !== null);
   if (lastNotes.length === 0 && firstNotes.length === 0) return buckets;

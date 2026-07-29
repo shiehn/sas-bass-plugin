@@ -9,7 +9,7 @@
  */
 
 import type { PluginMidiNote } from '@signalsandsorcery/plugin-sdk';
-import { parseLLMNoteResponse } from '@signalsandsorcery/plugin-sdk';
+import { barsToQn, parseLLMNoteResponse, tryParseTimeSignature } from '@signalsandsorcery/plugin-sdk';
 
 /** Global bass register window, inclusive: D1..G3. */
 export const BASS_REGISTER_LOW = 26;
@@ -29,9 +29,23 @@ export function parseBassLine(content: string): PluginMidiNote[] | null {
   return parsed.notes;
 }
 
-/** Drop notes starting at/past the clip end; trim tails to the clip end. */
-export function clampToClip(notes: PluginMidiNote[], bars: number): PluginMidiNote[] {
-  const totalBeats = bars * 4;
+/**
+ * Drop notes starting at/past the clip end; trim tails to the clip end.
+ *
+ * `timeSignature` (P8a) sizes the clip in the scene meter's quarter notes —
+ * omitted = '4/4', reproducing the legacy `bars * 4` exactly. Without it a
+ * 6/4 line's back-of-bar notes (beats 4-6 of every bar) were wrongly
+ * dropped, and a 3/4 clip accepted notes up to a bar past its real end.
+ */
+export function clampToClip(
+  notes: PluginMidiNote[],
+  bars: number,
+  timeSignature: string = '4/4',
+): PluginMidiNote[] {
+  // Malformed meters degrade to 4/4 (today's behavior) instead of throwing
+  // mid-generation — same gate panel-core's panelMeter applies.
+  const meter = tryParseTimeSignature(timeSignature) ? timeSignature : '4/4';
+  const totalBeats = barsToQn(bars, meter);
   const out: PluginMidiNote[] = [];
   for (const n of notes) {
     if (n.startBeat >= totalBeats - TIME_EPS) continue;

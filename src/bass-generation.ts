@@ -24,7 +24,12 @@ import type {
   MidiClipData,
   PluginTrackHandle,
 } from '@signalsandsorcery/plugin-sdk';
-import { formatConcurrentTracks } from '@signalsandsorcery/plugin-sdk';
+import {
+  formatConcurrentTracks,
+  panelClipEndSeconds,
+  panelMeter,
+  panelQuarterNotesPerBar,
+} from '@signalsandsorcery/plugin-sdk';
 import { buildBassSystemPrompt } from './bass-system-prompt';
 import {
   parseBassLine,
@@ -93,8 +98,11 @@ export async function generateBassline(
   const userPrompt = promptParts.join('\n');
 
   // --- 3. LLM --------------------------------------------------------------
+  // The scene meter appends the family meter rules on non-4/4 scenes
+  // (4/4 = legacy byte-identical prompt).
+  const meter = panelMeter(musicalContext);
   const llmResult = await host.generateWithLLM({
-    system: buildBassSystemPrompt(),
+    system: buildBassSystemPrompt(meter),
     user: userPrompt,
     responseFormat: 'json',
   });
@@ -102,7 +110,7 @@ export async function generateBassline(
   // --- 4. Deterministic validation ----------------------------------------
   const parsed = parseBassLine(llmResult.content);
   if (!parsed) throw new Error('LLM returned no valid bassline');
-  let notes = clampToClip(parsed, musicalContext.bars);
+  let notes = clampToClip(parsed, musicalContext.bars, meter);
   if (notes.length === 0) throw new Error('Bassline fell outside the clip');
   notes = await host.postProcessMidi(notes, {
     quantize: true,
@@ -118,7 +126,7 @@ export async function generateBassline(
   // (symmetric timbre variety at 4-bar boundaries on long repetitive lines).
   // Most lines land on 1–3 voices naturally; the only hard ceiling is the
   // track budget below.
-  const buckets = analyzeBassVoices(notes, musicalContext.bars);
+  const buckets = analyzeBassVoices(notes, musicalContext.bars, meter);
 
   // --- 6. Reconcile plan + track budget ------------------------------------
   const plan = planReconcile(existingMembers, buckets.length);
@@ -130,7 +138,7 @@ export async function generateBassline(
   // --- 7. Execute -----------------------------------------------------------
   const clipFor = (bucketNotes: MidiClipData['notes']): MidiClipData => ({
     startTime: 0,
-    endTime: (musicalContext.bars * 4 * 60) / musicalContext.bpm,
+    endTime: panelClipEndSeconds(musicalContext),
     tempo: musicalContext.bpm,
     notes: bucketNotes,
   });
@@ -233,6 +241,7 @@ export async function generateBassline(
     editNotes: buckets[0].notes,
     editBars: musicalContext.bars,
     editBpm: musicalContext.bpm,
+    editBeatsPerBar: panelQuarterNotesPerBar(musicalContext),
   }));
   services.markEditLoaded(anchorTrack.handle.id);
   host.showToast(
