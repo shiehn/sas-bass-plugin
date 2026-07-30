@@ -250,6 +250,10 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       // each bassline verbatim-copies and fades as a unit instead.
       transitionDesigner: true,
       importTracks: false,
+      // "Duck" cluster on the bus strip: the summed bass output dips on
+      // every kick in the scene (kick-MIDI-derived — mute-proof, follows
+      // regenerated kicks). Bass is the first family to ship it.
+      busSidechain: true,
     },
     createTrackOptions: () => ({ loadSynth: true, synthName: 'Surge XT' }),
     applyPortedTrackSound: async (handle: PluginTrackHandle) => {
