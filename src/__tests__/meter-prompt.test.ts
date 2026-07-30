@@ -6,7 +6,8 @@
  * the meter parameter landed, the 4/4 prompt — with the parameter omitted OR
  * passed explicitly as '4/4' — must still match that snapshot byte-for-byte.
  * Never update this snapshot as part of a meter change; a diff here means
- * 4/4 behavior drifted.
+ * 4/4 behavior drifted. Last deliberately revised for the kick-interplay +
+ * low-end-space style bullets (2026-07-30, hand-edited snap).
  */
 import { buildBassSystemPrompt } from '../bass-system-prompt';
 

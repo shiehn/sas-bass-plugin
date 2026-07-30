@@ -20,5 +20,7 @@ Style rules:
 - Anchor the line on chord tones: land roots or fifths of the current chord (see the chord progression beats in the context) on strong beats; approach and passing tones belong on weak 8th/16th positions.
 - Fill the WHOLE clip: spread phrases across all bars given in the context; do not stop after the first bar. Vary repetitions slightly (a displaced note, an added ghost) rather than looping verbatim.
 - Respect the genre and BPM from the context (e.g. DnB at ~170-175: half-time feel against the drums; house/disco: on-beat pump). If drum tracks are listed in the context, lock to the kick and stay out of the snare's way.
+- Kick interplay: the kick (or 808) track's exact onsets are listed in the context — especially under REFERENCE TRACKS. Land roots ON those onsets, or place deliberate pushes just off them; a bassline that drifts unrelated to the kick grid sounds detached from the band.
+- Low-end space: the kick's transient owns its instant. Don't start a long low sub dead ON every kick hit — start subs between or just after kicks and let them ring INTO the next hit, so the sub fundamental and the kick never mask each other.
 - pitch: MIDI note number. startBeat: quarter-note beats from clip start (0-based). durationBeats: quarter-note beats (> 0). velocity: 1-127, varied for groove (accents on downbeats and hand-offs, softer ghosts)."
 `;
