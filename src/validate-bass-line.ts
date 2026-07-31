@@ -67,6 +67,10 @@ export function clampToClip(
  *   host's trim-don't-drop policy); if the trimmed duration falls below
  *   MIN_NOTE_QN, drop the earlier note instead.
  * - Butt joins (end === next start) are legato and untouched.
+ * - SLIDE exception (acid program): a note with `slide: true` overlapping a
+ *   DIFFERENT next pitch keeps its overlap — on a mono/portamento patch that
+ *   overlap IS the 303 glide, still one sounding voice. A same-pitch "slide"
+ *   can't glide (it double-triggers) and is trimmed like any overlap.
  *
  * Deterministic and input-order independent.
  */
@@ -83,12 +87,16 @@ export function enforceMonophony(notes: PluginMidiNote[]): PluginMidiNote[] {
     mono.push({ ...n });
   }
 
-  // Pass 2: trim sequential overlaps to the next onset.
+  // Pass 2: trim sequential overlaps to the next onset (slides exempt).
   const out: PluginMidiNote[] = [];
   for (let i = 0; i < mono.length; i++) {
     const n = mono[i];
     const next = mono[i + 1];
     if (next && n.startBeat + n.durationBeats > next.startBeat + TIME_EPS) {
+      if (n.slide === true && next.pitch !== n.pitch) {
+        out.push(n); // sanctioned 303 slide — keep the overlap
+        continue;
+      }
       const trimmed = next.startBeat - n.startBeat;
       if (trimmed < MIN_NOTE_QN) continue; // too small to keep — drop
       out.push({ ...n, durationBeats: trimmed });

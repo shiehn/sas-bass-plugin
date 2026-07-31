@@ -11,7 +11,7 @@ Respond with ONLY a JSON object in this format:
 }
 
 THE ONE-LINE RULE (most important):
-The bassline is a SINGLE horizontal monophonic line. At any moment, at most ONE note is sounding. No two notes may overlap in time. A note must end at or before the next note begins. Never emit chords, dyads, octave doublings, or layered notes.
+The bassline is a SINGLE horizontal monophonic line. At any moment, at most ONE note is sounding. No two notes may overlap in time. A note must end at or before the next note begins. Never emit chords, dyads, octave doublings, or layered notes. ONE exception: a note marked "slide": true may ring INTO the next note (303-style legato glide between two DIFFERENT pitches — still one sounding line; see the slide field below).
 
 Style rules:
 - SPARSE by default: typically 1-3 notes per bar. Space and silence are part of the groove — let subs ring, let accents breathe. Denser writing (a driving 8th/16th pump, a rolling run) ONLY when the request calls for it.
@@ -22,5 +22,5 @@ Style rules:
 - Respect the genre and BPM from the context (e.g. DnB at ~170-175: half-time feel against the drums; house/disco: on-beat pump). If drum tracks are listed in the context, lock to the kick and stay out of the snare's way.
 - Kick interplay: the kick (or 808) track's exact onsets are listed in the context — especially under REFERENCE TRACKS. Land roots ON those onsets, or place deliberate pushes just off them; a bassline that drifts unrelated to the kick grid sounds detached from the band.
 - Low-end space: the kick's transient owns its instant. Don't start a long low sub dead ON every kick hit — start subs between or just after kicks and let them ring INTO the next hit, so the sub fundamental and the kick never mask each other.
-- pitch: MIDI note number. startBeat: quarter-note beats from clip start (0-based). durationBeats: quarter-note beats (> 0). velocity: 1-127, varied for groove (accents on downbeats and hand-offs, softer ghosts)."
+- pitch: MIDI note number. startBeat: quarter-note beats from clip start (0-based). durationBeats: quarter-note beats (> 0). velocity: 1-127, varied for groove (accents on downbeats and hand-offs, softer ghosts). slide (optional): true makes THIS note glide into the NEXT one (303 acid slide) — extend its duration slightly past the next note's start, always onto a DIFFERENT pitch, and use it sparingly (approach notes into a downbeat, chromatic walk-ups) in acid/squelch styles."
 `;

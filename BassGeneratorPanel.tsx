@@ -254,6 +254,10 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       // every kick in the scene (kick-MIDI-derived — mute-proof, follows
       // regenerated kicks). Bass is the first family to ship it.
       busSidechain: true,
+      // "WOB" cluster on the bus strip: tempo-locked filter motion (dubstep
+      // wobble / gate) rendered per-sample in the engine — live and bounced
+      // output identical. Bass is the first family to ship it.
+      busMotion: true,
     },
     createTrackOptions: () => ({ loadSynth: true, synthName: 'Surge XT' }),
     applyPortedTrackSound: async (handle: PluginTrackHandle) => {
