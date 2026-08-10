@@ -20,6 +20,10 @@
  *     deleting the anchor hands the prompt + group identity to the next
  *     voice (src/remove-voice.ts) so the group never degrades
  *   - reused voices keep their preset on regeneration, ALWAYS
+ *   - an IMPORTED bassline (header "Import Bassline" — cross-scene copy or
+ *     cross-panel port) is stamped as a group of ONE by onTrackCreated, so a
+ *     part that arrives from elsewhere reads and behaves like a generated one,
+ *     and brings the source's Surge patch with it (src/port-sound.ts)
  *
  * Sound serialization + 🎲 are the same mechanical Surge paths the synth
  * panel uses (shared createSurgeSoundAdapter; role-driven host.shufflePreset
@@ -47,11 +51,13 @@ import {
 import { buildBassSystemPrompt } from './src/bass-system-prompt';
 import { generateBassline, BASS_MAX_TRACKS } from './src/bass-generation';
 import { copyBassVoice } from './src/copy-voice';
+import { applyPortedBassSound } from './src/port-sound';
 import { prepareVoiceRemoval } from './src/remove-voice';
 import {
   BASS_VOICE_META_KEY,
   bassVoiceGroupSpec,
   bassGroupIsComplete,
+  stampBassAnchor,
   type BassVoiceMeta,
 } from './src/bass-voice-meta';
 import { createBassTransitionGroupAdapter } from './src/bass-transition';
@@ -240,6 +246,7 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       maxTracks: BASS_MAX_TRACKS,
       estimatedGenerationMs: ESTIMATED_GENERATION_MS,
       addTrackLabel: 'Add Bassline',
+      importTrackLabel: 'Import Bassline',
     },
     features: {
       instrumentPicker: true,
@@ -249,7 +256,12 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       // GROUPS with data-dependent counts, so 1:1 crossfades are undefined —
       // each bassline verbatim-copies and fades as a unit instead.
       transitionDesigner: true,
-      importTracks: false,
+      // Import Bassline: a bass track copied faithfully (MIDI + preset + FX)
+      // from another SCENE, or a part pulled across from another panel in this
+      // one — carrying its patch too when that patch is Surge state
+      // (applyPortedTrackSound below). Either arrival is stamped as a bassline
+      // group of ONE by onTrackCreated — the group is this panel's only shape.
+      importTracks: true,
       // "Duck" cluster on the bus strip: the summed bass output dips on
       // every kick in the scene (kick-MIDI-derived — mute-proof, follows
       // regenerated kicks). Bass is the first family to ship it.
@@ -260,12 +272,25 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       busMotion: true,
     },
     createTrackOptions: () => ({ loadSynth: true, synthName: 'Surge XT' }),
-    applyPortedTrackSound: async (handle: PluginTrackHandle) => {
-      try {
-        await host.shufflePreset(handle.id);
-      } catch {
-        /* non-fatal */
-      }
+    applyPortedTrackSound: async (handle: PluginTrackHandle, _role, source) => {
+      // A ported part arrives wearing the SOURCE panel's role ('lead',
+      // 'keys'…), which would send a preset shuffle hunting in the wrong
+      // category. Bass tracks are always role 'bass' — same as generation —
+      // so re-role FIRST, then sound it.
+      await host.setTrackRole(handle.id, 'bass').catch(() => {});
+      // Inherit the source's patch when it can travel (Surge → Surge);
+      // otherwise a fresh bass preset. See src/port-sound.ts.
+      await applyPortedBassSound({ host, sound: surgeSound, trackId: handle.id, source });
+    },
+    // A bassline that ARRIVES (cross-scene import or cross-panel port) becomes
+    // a voice-group of one, so it reads and behaves like every other bassline:
+    // group header with the prompt + Generate, voice row underneath, and the
+    // next Generate re-partitions it (reusing voice 0, so the imported preset
+    // survives). Add Bassline is deliberately NOT stamped — an empty track has
+    // nothing to anchor, and the first generation builds the real group.
+    onTrackCreated: async (handle: PluginTrackHandle, ctx) => {
+      if (ctx.origin === 'add') return;
+      await stampBassAnchor(host, ctx.activeSceneId, ctx.trackDataKey, handle.dbId);
     },
     // The core passes the scene meter (SDK 2.50.0) — non-4/4 scenes append
     // the bass meter rules; 4/4 stays byte-identical. Roles are unused (bass

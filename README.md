@@ -20,6 +20,7 @@ A [Signals & Sorcery](https://signalsandsorcery.com) plugin dedicated to electro
 - Each voice's Surge XT preset is chosen by range analysis of its actual notes — sustained subs draw low presets, mid stabs draw high ones — with sibling sounds excluded so every voice starts distinct
 - Regeneration reconciles the voice group and **never replaces a sound you picked**; per-voice 🎲 shuffle, sound history, FX chain, and piano-roll editing all work per track
 - **Copy a voice** (⧉ on any voice row): a deep copy — same notes and preset by value, brand-new track identity, no pointer to the original — appended to the group, muted, ready to re-sound
+- **Import Bassline** (panel header): reuse a part you already made — a bass track copied faithfully (MIDI + preset + FX) from another scene, or a MIDI part pulled across from another panel in this one. The sound comes too: a part ported from any Surge-based panel (synth, arp, pad, ensemble) keeps its patch, and only a source Surge cannot load — a third-party instrument, a drum sample — falls back to a fresh bass preset. Either way it arrives as a bassline group of one, so the next Generate re-partitions it into voices while keeping the imported sound
 
 ## Install
 
