@@ -47,6 +47,7 @@ import {
   createSurgeSoundAdapter,
   ConfirmDialog,
   GroupCollapseChevron,
+  useRegenerateGuard,
 } from '@signalsandsorcery/plugin-sdk';
 import { buildBassSystemPrompt } from './src/bass-system-prompt';
 import { generateBassline, BASS_MAX_TRACKS } from './src/bass-generation';
@@ -84,6 +85,18 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
   const allMuted = group.members.every((m) => m.track.runtimeState.muted);
   const anySoloed = group.members.some((m) => m.track.runtimeState.solo);
   const generateDisabled = anchorTrack.isGenerating || !anchorTrack.prompt.trim();
+
+  // The group Generate drives the anchor directly (never through TrackRow), so
+  // it carries its own overwrite guard: one press re-partitions EVERY voice.
+  const regenerate = useRegenerateGuard({
+    hasMidi: anchorTrack.hasMidi,
+    onGenerate: () => ctx.handlers.generate(anchorTrack.handle.id),
+    subject: 'The bassline',
+    detail: `All ${group.members.length} ${
+      group.members.length === 1 ? 'voice is' : 'voices are'
+    } re-partitioned from the new line.`,
+    testIdPrefix: `bass-group-regenerate-confirm-${group.groupId}`,
+  });
 
   // Per-voice delete (TrackRow's own ConfirmDialog gates the click): anchor
   // handoff surgery first when voice 0 goes, then the track + key scrub.
@@ -134,15 +147,17 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
           value={anchorTrack.prompt}
           placeholder="Describe the bassline…"
           onChange={(e) => ctx.handlers.promptChange(anchorTrack.handle.id, e.target.value)}
-          onKeyDown={promptEnterToGenerate(
-            () => ctx.handlers.generate(anchorTrack.handle.id),
-            generateDisabled
-          )}
+          onKeyDown={promptEnterToGenerate(regenerate.request, generateDisabled)}
         />
         <button
           data-testid={`bass-group-generate-${group.groupId}`}
           disabled={generateDisabled}
-          onClick={() => ctx.handlers.generate(anchorTrack.handle.id)}
+          onClick={regenerate.request}
+          title={
+            anchorTrack.hasMidi
+              ? 'Regenerate the bassline — replaces the current MIDI'
+              : 'Generate the bassline'
+          }
           className={`px-2 py-0.5 text-[10px] font-medium rounded-sm border transition-colors ${
             generateDisabled
               ? 'bg-sas-panel border-sas-border text-sas-muted/50 cursor-not-allowed'
@@ -222,6 +237,7 @@ function BassVoiceGroupRow({ group, ctx, sound }: BassVoiceGroupRowProps): React
         onCancel={() => setConfirmDelete(false)}
         testIdPrefix={`bass-group-delete-confirm-${group.groupId}`}
       />
+      {regenerate.dialog}
     </div>
   );
 }
