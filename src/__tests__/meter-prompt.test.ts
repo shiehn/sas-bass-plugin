@@ -6,8 +6,10 @@
  * the meter parameter landed, the 4/4 prompt — with the parameter omitted OR
  * passed explicitly as '4/4' — must still match that snapshot byte-for-byte.
  * Never update this snapshot as part of a meter change; a diff here means
- * 4/4 behavior drifted. Last deliberately revised for the kick-interplay +
- * low-end-space style bullets (2026-07-30, hand-edited snap).
+ * 4/4 behavior drifted. Last deliberately revised 2026-08-10 (hand-edited
+ * snap) to scope the low-end-space bullet to LONG subs and rename the kick's
+ * pinned header REFERENCE TRACKS → RHYTHM ANCHORS — the pair that had been
+ * pushing every bass note off the kick grid.
  */
 import { buildBassSystemPrompt } from '../bass-system-prompt';
 
