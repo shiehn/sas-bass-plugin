@@ -21,7 +21,7 @@ import manifest from './plugin.json';
 class BassGeneratorPlugin implements GeneratorPlugin {
   readonly id = '@signalsandsorcery/bass-generator';
   readonly displayName = 'Bass';
-  readonly version = '1.0.0';
+  readonly version = '1.6.0';
   readonly description =
     'Dedicated electronic bassline generator — one prompt becomes a single monophonic line mechanically partitioned across multiple Surge XT voices (typically 1–3, no upper bound)';
   readonly generatorType = 'midi' as const;

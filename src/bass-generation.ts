@@ -53,6 +53,16 @@ export async function generateBassline(
   services: GenerationServices,
 ): Promise<void> {
   const { host } = services;
+  // Progress reporting (SDK 3.11.0): loop stages report before the first item
+  // and after every item, with an honest bar floor of base + span·(done/total).
+  const loopStep = (stage: string, label: string, done: number, total: number, base: number, span: number): void =>
+    services.reportStep?.({
+      stage,
+      label,
+      done,
+      total,
+      percentFloor: base + Math.round((span * done) / Math.max(total, 1)),
+    });
   const scene = services.activeSceneId;
   if (!scene) throw new Error('No active scene.');
 
@@ -101,6 +111,7 @@ export async function generateBassline(
   // The scene meter appends the family meter rules on non-4/4 scenes
   // (4/4 = legacy byte-identical prompt).
   const meter = panelMeter(musicalContext);
+  services.reportStep?.({ stage: 'compose', label: 'COMPOSING BASSLINE...' });
   const llmResult = await host.generateWithLLM({
     system: buildBassSystemPrompt(meter),
     user: userPrompt,
@@ -112,6 +123,7 @@ export async function generateBassline(
   if (!parsed) throw new Error('LLM returned no valid bassline');
   let notes = clampToClip(parsed, musicalContext.bars, meter);
   if (notes.length === 0) throw new Error('Bassline fell outside the clip');
+  services.reportStep?.({ stage: 'post-process', label: 'REFINING LINE...', percentFloor: 55 });
   notes = await host.postProcessMidi(notes, {
     quantize: true,
     quantizeGrid: '1/16',
@@ -150,13 +162,18 @@ export async function generateBassline(
     for (const r of plan.reuse) {
       memberByBucket.set(r.bucketIndex, { engineId: r.engineId, dbId: r.dbId, isNew: false });
     }
+    const createTotal = plan.createBucketIndexes.length;
+    let createDone = 0;
+    if (createTotal > 0) loopStep('create-tracks', 'CREATING VOICE TRACKS', 0, createTotal, 60, 10);
     for (const bucketIndex of plan.createBucketIndexes) {
       const handle = await services.createFamilyTrack(`-v${bucketIndex}`);
       created.push(handle);
       memberByBucket.set(bucketIndex, { engineId: handle.id, dbId: handle.dbId, isNew: true });
+      loopStep('create-tracks', 'CREATING VOICE TRACKS', ++createDone, createTotal, 60, 10);
     }
 
     // Clips FIRST (preset range analysis reads real pitches), then role+mute.
+    loopStep('write-clips', 'WRITING MIDI', 0, buckets.length, 70, 5);
     for (let i = 0; i < buckets.length; i++) {
       const member = memberByBucket.get(i)!;
       await host.writeMidiClip(member.engineId, clipFor(buckets[i].notes));
@@ -169,6 +186,7 @@ export async function generateBassline(
           runtimeState: { ...t.runtimeState, muted: true },
         }));
       }
+      loopStep('write-clips', 'WRITING MIDI', i + 1, buckets.length, 70, 5);
     }
 
     // Starting presets for NEW voices only — reused voices keep the user's
@@ -176,23 +194,27 @@ export async function generateBassline(
     // don't spawn with the identical patch. Non-fatal: a failed pick leaves
     // the default Surge patch.
     const appliedNames: string[] = [];
+    loopStep('choose-sounds', 'CHOOSING SOUNDS', 0, buckets.length, 75, 15);
     for (let i = 0; i < buckets.length; i++) {
       const member = memberByBucket.get(i)!;
-      if (!member.isNew) continue;
-      try {
-        // Pass the bassline prompt so the host's semantic (vector-proximity)
-        // retrieval can pick by timbre; bucket labels are rhythmic ("offbeats"),
-        // not timbral, so they'd only pollute the query.
-        const result = await host.shufflePreset(member.engineId, appliedNames, {
-          description: track.prompt,
-        });
-        appliedNames.push(result.presetName);
-      } catch {
-        /* non-fatal — default patch */
+      if (member.isNew) {
+        try {
+          // Pass the bassline prompt so the host's semantic (vector-proximity)
+          // retrieval can pick by timbre; bucket labels are rhythmic ("offbeats"),
+          // not timbral, so they'd only pollute the query.
+          const result = await host.shufflePreset(member.engineId, appliedNames, {
+            description: track.prompt,
+          });
+          appliedNames.push(result.presetName);
+        } catch {
+          /* non-fatal — default patch */
+        }
       }
+      loopStep('choose-sounds', 'CHOOSING SOUNDS', i + 1, buckets.length, 75, 15);
     }
 
     // Metas last (a mid-flight failure above leaves the OLD group intact).
+    services.reportStep?.({ stage: 'save', label: 'SAVING PARTS...', percentFloor: 92 });
     for (let i = 0; i < buckets.length; i++) {
       const member = memberByBucket.get(i)!;
       const meta: BassVoiceMeta = {
