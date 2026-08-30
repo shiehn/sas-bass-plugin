@@ -274,8 +274,8 @@ function createBassGeneratorAdapter(host: PluginHost): GeneratorPanelAdapter<Bas
       transitionDesigner: true,
       // Import Bassline: a bass track copied faithfully (MIDI + preset + FX)
       // from another SCENE, or a part pulled across from another panel in this
-      // one — carrying its patch too when that patch is Surge state
-      // (applyPortedTrackSound below). Either arrival is stamped as a bassline
+      // one — carrying its FX chain, and its patch too when that patch is
+      // Surge state (SDK-core FX copy + applyPortedTrackSound below). Either arrival is stamped as a bassline
       // group of ONE by onTrackCreated — the group is this panel's only shape.
       importTracks: true,
       // "Duck" cluster on the bus strip: the summed bass output dips on

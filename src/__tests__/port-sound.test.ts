@@ -165,3 +165,66 @@ describe('applyPortedBassSound — never rolls back the port', () => {
     expect(result.outcome).toBe('shuffled');
   });
 });
+
+describe('applyPortedBassSound — deep-copies a third-party instrument (SDK 3.13.0)', () => {
+  const DIVA_SNAPSHOT: TrackSoundSnapshot = {
+    kind: 'preset',
+    state: 'DIVA_RAW_BLOB',
+    label: 'Analog Brass',
+    stateType: 'raw',
+    instrument: { pluginId: 'VST3-Diva-726290ab-357abb5a', name: 'Diva' },
+  };
+
+  it('loads a FRESH instance of the named plugin, then applies the copied raw state', async () => {
+    const setTrackInstrument = jest.fn(async () => undefined);
+    const { host, sound, source } = makeSetup(DIVA_SNAPSHOT, { setTrackInstrument });
+
+    const result = await applyPortedBassSound({ host: host as any, sound, trackId: 'eng-new', source });
+
+    // The catalog id loads a new instance — nothing references the source's.
+    expect(setTrackInstrument).toHaveBeenCalledWith('eng-new', 'VST3-Diva-726290ab-357abb5a');
+    expect(sound.copySnapshot).toHaveBeenCalledWith('eng-new', DIVA_SNAPSHOT);
+    expect(host.shufflePreset).not.toHaveBeenCalled();
+    expect(result).toEqual({ outcome: 'inherited', label: 'Analog Brass' });
+  });
+
+  it('falls back to a fresh bass preset when the plugin is missing on this machine', async () => {
+    const setTrackInstrument = jest.fn(async () => {
+      throw new Error('PLUGIN_NOT_FOUND');
+    });
+    const { host, sound, source } = makeSetup(DIVA_SNAPSHOT, { setTrackInstrument });
+
+    const result = await applyPortedBassSound({ host: host as any, sound, trackId: 'eng-new', source });
+
+    expect(sound.copySnapshot).not.toHaveBeenCalled();
+    expect(host.shufflePreset).toHaveBeenCalledWith('eng-new');
+    expect(result.outcome).toBe('shuffled');
+  });
+
+  it('keeps the fresh instance on its default sound when the patch apply fails (never Surge-shuffles into it)', async () => {
+    const setTrackInstrument = jest.fn(async () => undefined);
+    const { host, source } = makeSetup(DIVA_SNAPSHOT, { setTrackInstrument });
+    const sound = {
+      copySnapshot: jest.fn(async () => {
+        throw new Error('state rejected');
+      }),
+    };
+
+    const result = await applyPortedBassSound({ host: host as any, sound, trackId: 'eng-new', source });
+
+    expect(host.shufflePreset).not.toHaveBeenCalled();
+    expect(result).toEqual({ outcome: 'inherited', label: 'Diva' });
+  });
+
+  it('still shuffles an identity-less raw blob (legacy snapshot, host method present)', async () => {
+    const raw: TrackSoundSnapshot = { kind: 'preset', state: 'RAW', label: 'Old', stateType: 'raw' };
+    const setTrackInstrument = jest.fn(async () => undefined);
+    const { host, sound, source } = makeSetup(raw, { setTrackInstrument });
+
+    const result = await applyPortedBassSound({ host: host as any, sound, trackId: 'eng-new', source });
+
+    expect(setTrackInstrument).not.toHaveBeenCalled();
+    expect(sound.copySnapshot).not.toHaveBeenCalled();
+    expect(result.outcome).toBe('shuffled');
+  });
+});
